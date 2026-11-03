@@ -12,7 +12,7 @@ G="${GIT_GATE_SCRIPT:-}"
 for c in "$G" ".claude/skills/schematize-git/scripts/check-git.sh" "$HOME/.claude/skills/schematize-git/scripts/check-git.sh"; do
   [ -n "$c" ] && [ -f "$c" ] && { G="$c"; break; }
 done
-while read -r lref lsha rref rsha; do
+while read -r _ lsha rref rsha; do
   case "$rref" in
     refs/tags/*)
       [ "$lsha" = "$zero" ] && { echo "pre-push: apagar a tag $rref é vetado (tag publicada é imutável)" >&2; exit 1; }
@@ -38,4 +38,3 @@ while read -r lref lsha rref rsha; do
   fi
   [ "${GIT_ALLOW_PUSH_MAIN:-0}" = 1 ] || { echo "pre-push: push direto em $rref — abra PR (ou GIT_ALLOW_PUSH_MAIN=1 se for o dono solo)" >&2; exit 1; }
 done
-exit 0

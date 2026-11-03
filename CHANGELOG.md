@@ -14,6 +14,8 @@ com versionamento [SemVer](https://semver.org/lang/pt-BR/).
 ### Alterado
 - CI do gate (`assets/ci/github-actions-git.yml`) sem `pull_request`: `workflow_dispatch` + tags `hml-*`/`v*`, `concurrency`, `paths-ignore`. `ruleset-main.json` sem status check obrigatório.
 - Fluxo trunk-based: "CI verde no PR" virou "gate local verde"; CI remoto só antes de promover a hml (piso 27).
+### Corrigido
+- hook `pre-push`: removido o `exit 0` incondicional (o status do gate agora propaga) e `lref` não usado vira `_`.
 
 ## [0.2.1] — 2026-10-14
 Ponteiro para a skill nova `schematize-bots` (piso curto, sem duplicar).
