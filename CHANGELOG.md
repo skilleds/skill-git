@@ -3,7 +3,7 @@
 Todas as mudanças relevantes deste pacote, no formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.3.0] — 2026-11-03
 ### Adicionado
 - `check-git.sh --conclusao`: trava de conclusão do piso 22 (remote não vazio e acessível, árvore limpa, upstream, `HEAD == origin`); exit 1 = a demanda não conclui. Chamada nos comandos `/git-commit`, `/git-pr`, `/git-review`, `/git-handoff`, `/git-cc`.
 - Scanner de segredo ampliado: Anthropic `sk-ant-`, OpenAI `sk-`, Resend `re_`, Twilio `AC`/`SK`, JWT, URL com senha, webhook Slack/Discord e `password: valor` sem aspas.
