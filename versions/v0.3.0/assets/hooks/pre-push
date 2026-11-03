@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# pre-push — gate local do range, tag imutável e branch protegida. (schematize-git)
+# Como o CI remoto NÃO roda por commit nem por PR (piso 27), esta é a barreira por push, de graça.
+#  1) branch: roda `check-git.sh --range` no que está sendo empurrado (Conventional Commits, segredo,
+#     arquivo grande). Desligue só com GIT_GATE_PREPUSH=0 (e registre o motivo).
+#  2) tag: mover (SHA diferente do remoto) ou apagar tag publicada é vetado — tag é imutável (v*, hml-*).
+#  3) main/master/release/*: recusa apagar, non-fast-forward e push direto (dono solo: GIT_ALLOW_PUSH_MAIN=1).
+# Force/non-ff na branch protegida e mover/apagar tag nunca são liberados por variável.
+set -euo pipefail
+zero="0000000000000000000000000000000000000000"
+G="${GIT_GATE_SCRIPT:-}"
+for c in "$G" ".claude/skills/schematize-git/scripts/check-git.sh" "$HOME/.claude/skills/schematize-git/scripts/check-git.sh"; do
+  [ -n "$c" ] && [ -f "$c" ] && { G="$c"; break; }
+done
+while read -r _ lsha rref rsha; do
+  case "$rref" in
+    refs/tags/*)
+      [ "$lsha" = "$zero" ] && { echo "pre-push: apagar a tag $rref é vetado (tag publicada é imutável)" >&2; exit 1; }
+      if [ "$rsha" != "$zero" ] && [ "$rsha" != "$lsha" ]; then
+        echo "pre-push: mover a tag $rref é vetado — publique a próxima versão (tag errada não se corrige no lugar)" >&2; exit 1
+      fi
+      continue ;;
+    refs/heads/*) ;;
+    *) continue ;;
+  esac
+  if [ "$lsha" != "$zero" ] && [ "${GIT_GATE_PREPUSH:-1}" != 0 ] && [ -f "$G" ]; then
+    if [ "$rsha" != "$zero" ]; then rng="$rsha..$lsha"
+    else base="$(git merge-base origin/main "$lsha" 2>/dev/null || true)"; rng="${base:+$base..$lsha}"; fi
+    if [ -n "${rng:-}" ]; then
+      set +e; bash "$G" . --range "$rng" >&2; rc=$?; set -e
+      [ "$rc" = 1 ] && { echo "pre-push: o gate reprovou o range $rng — corrija antes de publicar" >&2; exit 1; }
+    fi
+  fi
+  case "$rref" in refs/heads/main|refs/heads/master|refs/heads/release/*) ;; *) continue ;; esac
+  [ "$lsha" = "$zero" ] && { echo "pre-push: apagar $rref é vetado" >&2; exit 1; }
+  if [ "$rsha" != "$zero" ] && ! git merge-base --is-ancestor "$rsha" "$lsha" 2>/dev/null; then
+    echo "pre-push: push não fast-forward em $rref (reescrita de histórico publicado) — vetado" >&2; exit 1
+  fi
+  [ "${GIT_ALLOW_PUSH_MAIN:-0}" = 1 ] || { echo "pre-push: push direto em $rref — abra PR (ou GIT_ALLOW_PUSH_MAIN=1 se for o dono solo)" >&2; exit 1; }
+done
