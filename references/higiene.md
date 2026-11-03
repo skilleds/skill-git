@@ -37,7 +37,7 @@ Modelo: `assets/github/gitattributes.base`. Pontos que importam:
 ## 4. Hooks
 
 - Hooks de cliente (`.git/hooks`) **não são versionados nem forçados**: servem de conforto, a barreira
-  é o CI + ruleset. Compartilhe via `core.hooksPath` apontando para uma pasta versionada
+  é o ruleset + o CI da tag de promoção. Compartilhe via `core.hooksPath` apontando para uma pasta versionada
   (`git config core.hooksPath .githooks`) ou pelo framework `pre-commit`.
 - Hooks da casa em `assets/hooks/`: `commit-msg` (Conventional Commits), `pre-commit` (segredo e
   arquivo proibido no índice; gitleaks se existir), `pre-push` (sem push direto/force/exclusão em

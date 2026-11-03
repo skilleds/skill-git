@@ -22,12 +22,12 @@ scanning resolvidos.
 | Exigir histórico linear | ligado (squash ou rebase, nunca merge commit) |
 | Exigir PR | ligado, 1 aprovação, descartar aprovação velha ao novo push, resolver conversas |
 | Revisão de code owner | ligado onde há `CODEOWNERS` |
-| Status checks obrigatórios | o job do gate (`check-git`) + testes + lint; branch atualizada antes do merge |
+| Status checks obrigatórios | **nenhum de CI remoto por PR** (piso 27: o CI roda só na tag `hml-*`/`v*`); o gate por commit é local (hooks + `check-git.sh`). Se um dia houver check, só com `ci-triggers-allow.txt` e ADR |
 | Commits assinados | ligado quando a política de `assinatura.md` está adotada |
-| Tags `v*` | restringir exclusão e atualização (tag publicada é imutável) |
+| Tags `v*` e `hml-*` | restringir exclusão e atualização (tag publicada é imutável): `assets/github/ruleset-tags.json` (`target: tag`) |
 
-Modelo importável: `assets/github/ruleset-main.json` (use `gh api -X POST repos/<org>/<repo>/rulesets
---input ruleset-main.json`; ajuste o nome do status check e comece em `enforcement: "evaluate"`).
+Modelos importáveis: `assets/github/ruleset-main.json` (branch) e `assets/github/ruleset-tags.json` (tags `v*`/`hml-*`) (use `gh api -X POST repos/<org>/<repo>/rulesets
+--input ruleset-main.json`; comece em `enforcement: "evaluate"`).
 
 Secret scanning e **push protection** do repositório ligados (Settings, Code security): bloqueiam o
 push com credencial reconhecida; o bypass exige motivo e gera alerta e auditoria. É a rede de baixo; o
@@ -37,7 +37,7 @@ push com credencial reconhecida; o bypass exige motivo e gera alerta e auditoria
 
 Em repo mantido por uma pessoa, exigir 1 aprovação trava o próprio dono. Escolha explícita, em ADR curto:
 
-- manter **PR obrigatório sem aprovação** (o PR serve de ponto de CI e de histórico) e deixar o dono
+- manter **PR obrigatório sem aprovação** (o PR serve de ponto de revisão e de histórico) e deixar o dono
   como bypass **auditável**; ou
 - sem PR, push direto em `main` com `GIT_ALLOW_PUSH_MAIN=1` (hook `pre-push`) e o ruleset só com
   force-push bloqueado, histórico linear e exclusão restrita.

@@ -3,6 +3,18 @@
 Todas as mudanças relevantes deste pacote, no formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),
 com versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+### Adicionado
+- `check-git.sh --conclusao`: trava de conclusão do piso 22 (remote não vazio e acessível, árvore limpa, upstream, `HEAD == origin`); exit 1 = a demanda não conclui. Chamada nos comandos `/git-commit`, `/git-pr`, `/git-review`, `/git-handoff`, `/git-cc`.
+- Scanner de segredo ampliado: Anthropic `sk-ant-`, OpenAI `sk-`, Resend `re_`, Twilio `AC`/`SK`, JWT, URL com senha, webhook Slack/Discord e `password: valor` sem aspas.
+- Gate `arquivo-grande` também no índice (`--staged`, hook `pre-commit`).
+- Hook `pre-push` barra mover/apagar tag publicada e roda `check-git.sh --range` no que está sendo empurrado (a barreira por push, já que o CI remoto não roda por commit).
+- `assets/github/ruleset-tags.json` (tags `v*` e `hml-*` imutáveis) e formato de tag de promoção `hml-AAAAMMDD.N`.
+- Bloco "Herda os pisos 22–29"; deploy só do git (23) e CI só antes do hml (27) documentados no fluxo.
+### Alterado
+- CI do gate (`assets/ci/github-actions-git.yml`) sem `pull_request`: `workflow_dispatch` + tags `hml-*`/`v*`, `concurrency`, `paths-ignore`. `ruleset-main.json` sem status check obrigatório.
+- Fluxo trunk-based: "CI verde no PR" virou "gate local verde"; CI remoto só antes de promover a hml (piso 27).
+
 ## [0.2.1] — 2026-10-14
 Ponteiro para a skill nova `schematize-bots` (piso curto, sem duplicar).
 

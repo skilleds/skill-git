@@ -62,8 +62,8 @@ skill põe o gate na mão de quem commita, antes do push.
 | `/git-help` | lista os comandos |
 | `/git-load` | carrega à força o corpo normativo (fluxo, assinatura, proteção, segredos, higiene) |
 | `/git-review` | roda o gate no range e lê o que a máquina não lê (atomicidade, tamanho de PR, ruleset, divergência local) |
-| `/git-commit` | commit atômico em Conventional Commits, gate do índice, push na hora |
-| `/git-pr` | PR pequeno, rebase, gate verde, descrição das 4 perguntas |
+| `/git-commit` | commit atômico em Conventional Commits, gate do índice, push na hora e trava de conclusão (`--conclusao`) |
+| `/git-pr` | PR pequeno, rebase, gate local verde, descrição das 4 perguntas |
 | `/git-leak` | segredo commitado: rotacionar primeiro; histórico só depois e só se preciso |
 | `/git-release` | SemVer calculado pelos commits, CHANGELOG, tag anotada/assinada |
 | `/git-claude` | cria/mescla o `CLAUDE.md` sempre-on do fluxo git na raiz do repo |
@@ -73,7 +73,7 @@ skill põe o gate na mão de quem commita, antes do push.
 
 1. **Rode o gate antes de discutir estilo:** `bash scripts/check-git.sh .` — `0` passa · `1` reprova ·
    `2` **nada para verificar** (que não é aprovação). Opções: `--range A..B` (padrão `@{u}..HEAD`),
-   `--staged` (hook pre-commit), `--linear` (branch que exige histórico linear), `--require-signed`,
+   `--staged` (hook pre-commit), `--conclusao` (piso 22: remote + push + árvore limpa + `HEAD == origin`), `--linear` (branch que exige histórico linear), `--require-signed`,
    `--msg-file ARQ` (hook commit-msg). Funciona só com `git` e `awk`; gitleaks é opcional.
 2. **Fluxo e mensagem** (`references/fluxo.md`): branch curta, Conventional Commits, PR pequeno.
 3. **Assine** (`references/assinatura.md`) e **proteja a `main` no servidor** (`references/protecao.md`).
@@ -92,12 +92,12 @@ Mapa de references:
 | Versões e fatos de terceiros, fontes, o que foi executado (anexo volátil) | `references/stack-versoes.md` |
 
 Assets prontos: `assets/hooks/` (`commit-msg`, `pre-commit`, `pre-push`) · `assets/github/`
-(`ruleset-main.json`, `CODEOWNERS.example`, `pull_request_template.md`, `gitignore.base`,
-`gitattributes.base`) · `assets/ci/github-actions-git.yml` (job `check-git`, Action pinada por SHA).
+(`ruleset-main.json`, `ruleset-tags.json`, `CODEOWNERS.example`, `pull_request_template.md`, `gitignore.base`,
+`gitattributes.base`) · `assets/ci/github-actions-git.yml` (job `check-git` em `workflow_dispatch` + tags `hml-*`/`v*`, Action pinada por SHA; sem `pull_request`).
 
 ## Pisos inegociáveis (vetam o atalho)
 
-1. **GitHub é a fonte da verdade: commit + push na hora.** A cópia local nunca diverge do publicado.
+1. **GitHub é a fonte da verdade: commit + push na hora — e trava de conclusão (piso 22).** A cópia local nunca diverge do publicado; sem remote acessível, push feito, árvore limpa e `HEAD == origin` a demanda **não conclui** (`check-git.sh . --conclusao`, exit 1 = não concluída).
 2. **Trunk-based:** `main` sempre verde e liberável, branches curtas (horas a 1-2 dias), rebase sobre
    `main`, integração por squash ou rebase (**histórico linear**). Sem `develop`.
 3. **Conventional Commits 1.0.0** em todo commit que chega a `main` (tipos fixos da casa, `!` ou
@@ -112,8 +112,9 @@ Assets prontos: `assets/hooks/` (`commit-msg`, `pre-commit`, `pre-push`) · `ass
 7. **Assinatura:** tag de release assinada e commits de `main` assinados (SSH por padrão) quando a
    política está adotada; cobrança no ruleset, não só no cliente.
 8. **A `main` é protegida no servidor:** ruleset com force push bloqueado, exclusão restrita, linear,
-   PR, status check do gate e revisão de code owner. Regra só no cliente não conta.
-9. **Tags SemVer anotadas e imutáveis.** Tag errada se corrige com a versão seguinte, nunca movida.
+   PR e revisão de code owner. Regra só no cliente não conta. **Sem CI por PR/commit (piso 27):** o gate
+   por commit/push é local (hooks); o CI remoto roda só na tag `hml-*`/`v*` ou sob pedido.
+9. **Tags SemVer (`vX.Y.Z`) e de promoção (`hml-AAAAMMDD.N`) anotadas e imutáveis.** Tag errada se corrige com a seguinte, nunca movida; ruleset de tag + hook `pre-push` barram mover/apagar.
 10. **Higiene desde o primeiro commit:** `.gitignore`, `.gitattributes`, CODEOWNERS por time; arquivo
     > 5 MiB, `.env`, chave e `*.tfstate` fora do repo (LFS ou artefato).
 11. **Monorepo x multirrepo é decisão por fit com ADR**, não moda; serviços de runtime seguem o
@@ -121,6 +122,8 @@ Assets prontos: `assets/hooks/` (`commit-msg`, `pre-commit`, `pre-push`) · `ass
 12. **Efeito externo** (e-mail, cobrança, webhook de saída) disparado por hook ou CI de git nunca sai de
     não-produção: push em branch curta não pode ter efeito real.
 13. <!-- herdado:engineering/orquestracao:curto -->**Orquestrador não desenvolve; subagent barato executa.** O agent principal só planeja, despacha e revisa; ação onerosa vira micro-tasks para o executor mais barato que resolve: `haiku` (mecânico) / `sonnet` (código; falhou → mesmo subagent corrige, até 2 rodadas) → Codex `gpt-5.6-terra` → Cursor → subagent `opus` (motivo) → `park`; **visual vai direto ao Codex**; **imagem nunca pelo Claude: detectar Codex/Gemini e perguntar ao usuário qual usar (Codex é a sugestão), nunca API de imagem paga**; papéis em `agentes.toml`. No overdev, cada item do checklist vai a um subagent e o principal revisa antes do `- [x]`. **Sem frota ociosa:** idle com pendência volta ao trabalho; dependente de outro agent → mata e enfileira com gatilho; terminou → mata (§9.6). Detalhe: `schematize-engineering` → `references/orquestracao.md` §9.<!-- /herdado -->
+
+14. Herda os pisos 22–29 da `schematize-engineering` (git como trava de conclusão, deploy só do git, ops é o gate da IA, sem agents inúteis, relatório 30 min/handoff 6 h, CI remoto só antes do hml, microserviço autônomo, build em dev/hml + higiene). Aqui, em especial: 22 (trava de conclusão), 23 (deploy = clone/fetch de SHA/tag do remoto; VETADO scp/rsync/bundle) e 27 (CI remoto só `workflow_dispatch` + tags `hml-*`/`v*`).
 
 ## Regra de mídia
 

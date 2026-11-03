@@ -24,7 +24,7 @@
 |---|---|---|
 | Editor/máquina | `.gitignore` forte (`higiene.md`), cofre local | arquivo sensível nem entra no `git add` |
 | pre-commit | `assets/hooks/pre-commit` (regex da casa) + **gitleaks** se instalado | índice com credencial conhecida |
-| CI | `scripts/check-git.sh` no range do PR + gitleaks/trufflehog no histórico | o que passou do hook (hook é opt-in e `--no-verify` existe) |
+| CI remoto (só na tag `hml-*`/`v*`, piso 27) + `pre-push` | `scripts/check-git.sh` no range desde a promoção anterior + gitleaks/trufflehog no histórico | o que passou do hook (hook é opt-in e `--no-verify` existe) |
 | Servidor | **secret scanning + push protection** do GitHub (ligar por repo/organização) | push com credencial reconhecida, mesmo sem hook local |
 
 Nenhuma camada sozinha basta: hook local é contornável, scanner de servidor só conhece formatos de

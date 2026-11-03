@@ -53,8 +53,11 @@ Formato: `tipo(escopo)!: descrição` · linha em branco · corpo · linha em br
 - **Descrição responde 4 perguntas:** o que muda e por quê (link da issue/ADR); como foi testado
   (comando e resultado, não "testei"); risco e rollback (migração? flag? reversível?); o que o revisor
   deve olhar com mais atenção.
-- **CI verde antes de pedir revisão.** PR em rascunho enquanto o gate está vermelho.
-- **Quem abre não aprova o próprio.** Em repo de uma pessoa só, a revisão é o próprio CI mais a
+- **Gate LOCAL verde antes de pedir revisão** (`check-git.sh`, hooks, `tools/ci.sh`). PR em rascunho
+  enquanto o gate local está vermelho. **Não existe CI remoto por PR nem por commit** (piso 27): ele
+  roda uma vez antes de promover a hml (tag `hml-*`), em release (`v*`) ou sob pedido. Nenhum agent
+  dispara nem espera CI remoto por commit.
+- **Quem abre não aprova o próprio.** Em repo de uma pessoa só, a revisão é o gate local mais a
   releitura do diff em PR (a regra "dono solo" está em `protecao.md` §3).
 - Comentário de revisão vira commit novo na branch durante a revisão; o squash final limpa.
 - Template pronto: `assets/github/pull_request_template.md`.
@@ -69,11 +72,25 @@ oscilação de versão que já custou caro. Consequências:
 - Nunca deixe a cópia local divergir do publicado: se a branch local tem commits que o remoto não tem,
   ou o remoto tem os que a local não tem, resolva agora (fetch, rebase, push), não "depois".
 - `git status` sujo no fim da sessão é pendência declarada, não estado normal.
+- **TRAVA DE CONCLUSÃO (piso 22 da engineering):** nenhuma demanda se declara concluída sem **remote
+  acessível, push feito, árvore limpa e `HEAD == origin`**. Gate: `bash
+  .claude/skills/schematize-git/scripts/check-git.sh . --conclusao` (exit 1 = **a demanda NÃO
+  conclui**: crie o repo — `gh repo create <org>/<repo> --private` —, adicione o `origin` e dê o push
+  antes de declarar pronto). Vale para todo repo tocado, inclusive o `_archive` privado. Commit e
+  push do relatório (30 min) e do handoff (6 h) também (piso 26).
+- **Deploy só do git (piso 23):** o artefato de deploy é um **commit SHA ou tag** presente no remoto,
+  verificável (assinatura via `allowed_signers`, `assinatura.md`); o ops clona/atualiza esse SHA na VPS.
+  Commit não pushado não vai a lugar nenhum. VETADO `scp`/`rsync`/`tar | ssh`/`docker save | load`/
+  `git bundle`.
 - Em repo que o dono mantém sozinho e que não tem PR (ex.: pacote de skill), push direto em `main` é
   permitido com `GIT_ALLOW_PUSH_MAIN=1` (ver o hook `pre-push`); force push, nunca.
 
 ## 5. Tags SemVer e changelog
 
+- **Tag de promoção a hml (piso 27):** `hml-AAAAMMDD.N` (ex.: `hml-20261103.1`), **anotada e imutável**
+  como as `vX.Y.Z`; empurrá-la dispara o CI remoto **uma vez**, sobre tudo o que acumulou desde a
+  promoção anterior. Mesmos rulesets de tag (`assets/github/ruleset-tags.json`) e o hook `pre-push`
+  barram mover/apagar. Promoção errada se corrige com a tag seguinte.
 - Release = **tag anotada** `vX.Y.Z` em commit de `main` (`git tag -a v1.4.0 -m "v1.4.0"`), assinada
   quando a política de assinatura (`assinatura.md`) está ligada (`git tag -s`). Tag publicada não se
   move nem se apaga: errou, publique `vX.Y.(Z+1)`.

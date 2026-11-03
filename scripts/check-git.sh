@@ -11,26 +11,30 @@
 #   arquivo-proibido .env, chave privada, *.tfstate, *.pem etc. versionados
 #   merge-linear     merge commit no range quando a branch exige histórico linear (--linear)
 #   nao-assinado     commit sem assinatura válida, só com --require-signed
+#   conclusao-*      só com --conclusao (piso 22, trava de conclusão): remote vazio/inacessível, árvore suja,
+#                    sem upstream, HEAD detachado, HEAD != origin (commits por empurrar ou local atrasado)
 # Aviso (não reprova): assunto > 72 colunas; .gitignore ausente.
 # Waiver: `git-ok: <motivo>` na própria linha (segredo/arquivo-proibido no conteúdo) ou
 # `Git-Ok: <regra> <motivo>` no corpo do commit (qualquer regra daquele commit). Sem motivo não vale.
 # Entrada: check-git.sh [dir] [--range A..B] [--staged] [--linear] [--require-signed]
 #          [--msg-file ARQ]   (valida só a mensagem de ARQ: uso do hook commit-msg)
+#          [--conclusao]      (trava de conclusão do piso 22: sai 1 = a demanda NÃO conclui; não varre commits)
 #          dir padrão = "."; range padrão = @{u}..HEAD, senão merge-base com origin/main|main, senão tudo.
 # Saída: 0 passa · 1 reprova · 2 nada para verificar (repo sem commits, range vazio) — NÃO é aprovação.
 # Env: GIT_GATE_MAX_MB, GIT_GATE_LINEAR=1, GIT_GATE_SIGNED=1; `git config schematize.linear true`.
 set -euo pipefail
 
-DIR="."; RANGE=""; STAGED=0; LINEAR="${GIT_GATE_LINEAR:-0}"; SIGNED="${GIT_GATE_SIGNED:-0}"; MSGFILE=""
+DIR="."; RANGE=""; STAGED=0; CONCLUSAO=0; LINEAR="${GIT_GATE_LINEAR:-0}"; SIGNED="${GIT_GATE_SIGNED:-0}"; MSGFILE=""
 MAXMB="${GIT_GATE_MAX_MB:-5}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --range) RANGE="${2:?--range exige A..B}"; shift 2 ;;
     --staged) STAGED=1; shift ;;
     --linear) LINEAR=1; shift ;;
+    --conclusao) CONCLUSAO=1; shift ;;
     --require-signed) SIGNED=1; shift ;;
     --msg-file) MSGFILE="${2:?--msg-file exige arquivo}"; shift 2 ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
     -*) echo "opção desconhecida: $1" >&2; exit 2 ;;
     *) DIR="$1"; shift ;;
   esac
@@ -67,6 +71,32 @@ fi
 
 cd "$DIR" 2>/dev/null || { echo "diretório inexistente: $DIR" >&2; exit 2; }
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "check-git: $DIR não é repositório git — nada a verificar" >&2; exit 2; }
+if [ "$CONCLUSAO" = 1 ]; then
+  # Trava de conclusão (piso 22): tudo no git, remoto ACESSÍVEL, push feito. Falhou = a demanda não conclui.
+  falha_conclusao() { reprova "$1" "$2"; }
+  git rev-parse -q --verify HEAD >/dev/null 2>&1 || falha_conclusao conclusao-sem-commit "repositório sem commits — commite e publique antes de concluir"
+  if [ -z "$(git remote -v 2>/dev/null)" ]; then
+    falha_conclusao conclusao-sem-remote "git remote -v vazio — crie o repo (gh repo create <org>/<repo> --private), adicione o origin e dê push antes de declarar pronto"
+  else
+    [ -z "$(git status --porcelain 2>/dev/null)" ] || falha_conclusao conclusao-arvore-suja "árvore com alterações não commitadas — commit + push antes de concluir"
+    br="$(git symbolic-ref -q --short HEAD 2>/dev/null || true)"
+    if [ -z "$br" ]; then falha_conclusao conclusao-head-destacado "HEAD destacado — volte para uma branch publicada"
+    elif ! git rev-parse -q --verify '@{u}' >/dev/null 2>&1; then
+      falha_conclusao conclusao-sem-upstream "a branch $br nunca foi empurrada — git push -u origin $br"
+    else
+      remoto="$(timeout 20 git ls-remote --exit-code origin "refs/heads/${br}" 2>/dev/null | cut -f1 | head -n1 || true)"
+      [ -n "$remoto" ] || remoto="$(git rev-parse '@{u}')" # remoto inacessível: cai no espelho local, mas avisa
+      [ -n "$(timeout 20 git ls-remote origin 2>/dev/null | head -n1 || true)" ] || avisa conclusao-remote-inacessivel "remote não respondeu; comparando com o último fetch (não prova HEAD == origin)"
+      head_sha="$(git rev-parse HEAD)"
+      if [ "$head_sha" != "$remoto" ]; then
+        nfrente="$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo '?')"
+        falha_conclusao conclusao-head-diverge "HEAD ${head_sha:0:9} != origin ${remoto:0:9} ($nfrente commit(s) por empurrar) — git push antes de concluir"
+      fi
+    fi
+  fi
+  if [ "$fail" -gt 0 ]; then echo "check-git: CONCLUSÃO BLOQUEADA — a demanda NÃO se conclui ($fail pendência(s))"; exit 1; fi
+  echo "check-git: conclusão ok (remote presente, árvore limpa, HEAD == origin)"; exit 0
+fi
 git rev-parse -q --verify HEAD >/dev/null 2>&1 || [ "$STAGED" = 1 ] || { echo "check-git: repositório sem commits — nada a verificar" >&2; exit 2; }
 [ "$(git config --get schematize.linear 2>/dev/null || true)" = "true" ] && LINEAR=1
 case "$MAXMB" in ''|*[!0-9]*) echo "GIT_GATE_MAX_MB inválido: $MAXMB" >&2; exit 2 ;; esac
@@ -78,8 +108,16 @@ PRE_SLACK='xox[abprs]-[A-Za-z0-9-]{10,}'
 PRE_STRIPE='(sk|rk)_live_[A-Za-z0-9]{16,}'
 PRE_KEY='-----BEGIN ([A-Z]+ )?PRIVATE KEY'
 PRE_GOOG='AIza[0-9A-Za-z_-]{35}'
+PRE_ANTH='sk-ant-[A-Za-z0-9_-]{20,}'
+PRE_OPENAI='(^|[^A-Za-z0-9_])sk-(proj-)?[A-Za-z0-9_-]{32,}'
+PRE_RESEND='(^|[^A-Za-z0-9_])re_[A-Za-z0-9]{24,}'
+PRE_TWILIO='(^|[^A-Za-z0-9])(SK|AC)[0-9a-f]{32}([^0-9A-Za-z]|$)'
+PRE_JWT='eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+PRE_URLPW='://[^/:@[:space:]]+:[^@/[:space:]$<{]{6,}@'
+PRE_HOOK='hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|discord(app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+'
+PRE_BARE='^[[:space:]]*(password|passwd|secret|api[_-]?key|token|senha)[A-Za-z0-9_]*[[:space:]]*[:=][[:space:]]*[A-Za-z0-9+/_.-]{16,}[[:space:]]*$'
 PRE_GENERIC='(password|passwd|secret|api[_-]?key|token|senha)[A-Za-z0-9_]*["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"'$<{ ]{12,}["'"'"']'
-SEG_RE="($PRE_AWS|$PRE_GH|$PRE_SLACK|$PRE_STRIPE|$PRE_KEY|$PRE_GOOG|$PRE_GENERIC)"
+SEG_RE="($PRE_AWS|$PRE_GH|$PRE_SLACK|$PRE_STRIPE|$PRE_KEY|$PRE_GOOG|$PRE_ANTH|$PRE_OPENAI|$PRE_RESEND|$PRE_TWILIO|$PRE_JWT|$PRE_URLPW|$PRE_HOOK|$PRE_BARE|$PRE_GENERIC)"
 PROIBIDO_RE='(^|/)(\.env(\.[A-Za-z0-9_-]+)?|id_(rsa|dsa|ecdsa|ed25519)|[^/]+\.(pem|p12|pfx|jks|keystore)|[^/]+\.tfstate(\.backup)?|[^/]+\.tfplan|credentials\.json|\.npmrc|\.netrc)$'
 PROIBIDO_OK_RE='(^|/)\.env\.(example|sample|template)$'
 
@@ -108,6 +146,14 @@ if [ "$STAGED" = 1 ]; then
   echo "check-git: índice (--staged)"
   saida="$( { echo "@@C INDEX"; git diff --cached -U0 --no-color --no-ext-diff; } | varre_diff )"
   commits_n=0
+  # arquivo-grande também no índice (o hook pre-commit usa --staged): blob > limite que não é ponteiro LFS
+  limite=$((MAXMB*1024*1024))
+  while IFS= read -r -d '' caminho; do
+    tam="$(git cat-file -s ":$caminho" 2>/dev/null || echo 0)"
+    [ "$tam" -gt "$limite" ] || continue
+    git cat-file -p ":$caminho" 2>/dev/null | head -c 64 | grep -q 'git-lfs.github.com/spec' && continue
+    reprova arquivo-grande "$caminho: $((tam/1024/1024)) MiB (limite ${MAXMB} MiB) — use Git LFS ou tire do repo"
+  done < <(git diff --cached --name-only --diff-filter=AM -z)
 else
   if [ -z "$RANGE" ]; then
     if git rev-parse -q --verify '@{u}' >/dev/null 2>&1; then RANGE='@{u}..HEAD'

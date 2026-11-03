@@ -1,8 +1,16 @@
-# Gate de histórico no PR: Conventional Commits, segredo, arquivo grande, merge linear.
-# O nome do job (check-git) é o status check que o ruleset-main.json exige.
+# Gate de histórico do git, no CI REMOTO — só onde o piso 27 permite.
+# O gate por commit/push é LOCAL (hooks `pre-commit`/`pre-push` + `check-git.sh`). Este workflow NÃO roda
+# por commit nem por PR (custo): roda (a) uma vez antes de promover a hml (tag `hml-*`), (b) em release
+# (tag `v*`) e (c) sob pedido (`workflow_dispatch`). Não existe "check obrigatório no PR".
 name: check-git
 on:
-  pull_request:
+  workflow_dispatch:
+  push:
+    tags: ["hml-*", "v*"]
+    paths-ignore: ["**.md", "docs/**", "*_archive/**"]
+concurrency:
+  group: check-git-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -13,11 +21,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Gate do fluxo git (range do PR)
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      - name: Gate do fluxo git (commits desde a promoção anterior)
         run: |
           set -euo pipefail
           # Copie scripts/check-git.sh da skill schematize-git para .github/scripts/ do repo.
-          bash .github/scripts/check-git.sh . --range "${BASE_SHA}..${HEAD_SHA}" --linear
+          # Range = desde a tag anterior (hml-* ou v*); sem tag anterior, tudo. Não há base de PR.
+          PREV="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
+          RANGE="${PREV:+${PREV}..}${GITHUB_SHA}"
+          # --require-signed só depois de montar o allowed_signers (references/assinatura.md).
+          bash .github/scripts/check-git.sh . --range "${RANGE}" --linear

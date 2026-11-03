@@ -17,3 +17,7 @@ argument-hint: "[assunto opcional]"
 4. Commit (assinado se a política está ligada). **Nunca `--no-verify`.** Hook barrou, conserte a causa.
 5. **Push na hora** em branch curta (`git push -u origin <branch>`); push direto em `main` só no repo
    de dono solo com `GIT_ALLOW_PUSH_MAIN=1`. Nunca `--force`; na sua própria branch, `--force-with-lease`.
+6. **Trava de conclusão (piso 22):** `bash .claude/skills/schematize-git/scripts/check-git.sh . --conclusao`.
+   Exit 1 (sem remote, push falho, árvore suja, `HEAD != origin`) = **a demanda NÃO conclui**: sem
+   remote, crie/peça o repo (`gh repo create <org>/<repo> --private`), `git remote add origin`, push,
+   e rode a trava de novo antes de declarar pronto. Sem CI remoto por commit: não espere nem dispare.

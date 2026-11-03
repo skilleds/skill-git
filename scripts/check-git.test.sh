@@ -101,6 +101,25 @@ NOME=msg-comentario-ignorado; printf '# comentario\nfix: certo\n' >"$TMP/m3"; es
 
 echo "== HOOKS de assets/hooks (instalados num repo temporário)"
 HK="$AQUI/../assets/hooks"
+echo "== VERMELHOS/VERDES NOVOS (G8: conclusão, scanner, índice grande)"
+ANT="sk-ant-""$(printf 'aB3_%.0s' {1..8})"; OAI="sk-""$(printf 'Qz9%.0s' {1..12})"; RSD="re_""$(printf 'Ab1%.0s' {1..10})"
+TWL="AC""$(printf 'a1%.0s' {1..16})"; PGU="postgres://app:""$(printf 'pw9%.0s' {1..3})""@db.exemplo.invalid/x"
+SLH="https://hooks.slack.com/services/T0123ABC/B0123ABC/""$(printf 'Xy7%.0s' {1..6})"
+BARE="password: ""$(printf 'xK7q%.0s' {1..5})"
+for par in "anthropic:k=$ANT" "openai:k=$OAI" "resend:k=$RSD" "twilio:sid=$TWL" "url-com-senha:u=$PGU" "webhook-slack:u=$SLH" "senha-sem-aspas:$BARE"; do
+  novo "vermelho-${par%%:*}"; w cfg.yml "${par#*:}"; c "chore: cfg"; esperar 1 "segredo" --range "$(R)"
+done
+novo verde-senha-yaml-por-ref; w cfg.yml 'password: ${DB_PASSWORD}'; c "chore: cfg"; esperar 0 "ok" --range "$(R)"
+novo vermelho-staged-grande; head -c $((6*1024*1024)) /dev/zero > "$D/big.bin"; git -C "$D" add big.bin; esperar 1 "arquivo-grande" --staged
+novo verde-staged-lfs; printf 'version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 99999999\n' > "$D/g.bin"; git -C "$D" add g.bin; esperar 0 "ok" --staged
+# --conclusao (piso 22)
+novo concl-sem-remote; esperar 1 "conclusao-sem-remote" --conclusao
+novo concl-ok; git init -q --bare -b main "$TMP/c-ok.git"; git -C "$D" remote add origin "$TMP/c-ok.git"; git -C "$D" push -q -u origin main; esperar 0 "conclusão ok" --conclusao
+novo concl-suja; git init -q --bare -b main "$TMP/c-suja.git"; git -C "$D" remote add origin "$TMP/c-suja.git"; git -C "$D" push -q -u origin main; w x.txt 1; esperar 1 "conclusao-arvore-suja" --conclusao
+novo concl-sem-push; git init -q --bare -b main "$TMP/c-sp.git"; git -C "$D" remote add origin "$TMP/c-sp.git"; esperar 1 "conclusao-sem-upstream" --conclusao
+novo concl-a-frente; git init -q --bare -b main "$TMP/c-af.git"; git -C "$D" remote add origin "$TMP/c-af.git"; git -C "$D" push -q -u origin main; w y.txt 1; c "feat: y"; esperar 1 "conclusao-head-diverge" --conclusao
+novo concl-remote-fantasma; git -C "$D" remote add origin "$TMP/nao-existe.git"; git -C "$D" config branch.main.remote origin; git -C "$D" config branch.main.merge refs/heads/main; esperar 1 "conclusao" --conclusao
+
 if [ -d "$HK" ]; then
   novo hook-commit-msg; cp "$HK/commit-msg" "$D/.git/hooks/commit-msg"; chmod +x "$D/.git/hooks/commit-msg"
   export GIT_GATE_SCRIPT="$G"
@@ -113,6 +132,7 @@ if [ -d "$HK" ]; then
   git -C "$D" reset -q; w cfg.txt "ok"; git -C "$D" add cfg.txt
   if git -C "$D" commit -q -m "chore: x" 2>/dev/null; then echo "  ✔ hook pre-commit aceita limpo"; ok=$((ok+1)); else echo "  ✖ hook pre-commit barrou limpo"; fail=$((fail+1)); fi
   # pre-push: recusa push direto na main protegida
+  export GIT_GATE_SCRIPT="$G"
   novo hook-pre-push; cp "$HK/pre-push" "$D/.git/hooks/pre-push"; chmod +x "$D/.git/hooks/pre-push"
   git init -q --bare -b main "$TMP/remoto.git"; git -C "$D" remote add origin "$TMP/remoto.git"
   w a.txt x; c "feat: x"
@@ -121,6 +141,14 @@ if [ -d "$HK" ]; then
   git -C "$D" checkout -q -b feat/x; w b.txt y; c "feat: y"
   if git -C "$D" push -q origin feat/x 2>/dev/null; then echo "  ✔ pre-push libera branch curta"; ok=$((ok+1)); else echo "  ✖ pre-push barrou branch curta"; fail=$((fail+1)); fi
   if git -C "$D" push -q --force origin feat/x:main 2>/dev/null; then echo "  ✖ pre-push deixou force na main"; fail=$((fail+1)); else echo "  ✔ pre-push barra force/non-ff na main"; ok=$((ok+1)); fi
+  # pre-push: tag imutável
+  git -C "$D" checkout -q main; git -C "$D" tag -a v1.0.0 -m v1.0.0; git -C "$D" push -q origin v1.0.0 2>/dev/null
+  w t.txt 1; git -C "$D" add -A; git -C "$D" commit -q -m "feat: t"; git -C "$D" tag -f -a v1.0.0 -m outro >/dev/null 2>&1
+  if git -C "$D" push -q --force origin v1.0.0 2>/dev/null; then echo "  ✖ pre-push deixou mover tag"; fail=$((fail+1)); else echo "  ✔ pre-push barra mover tag publicada"; ok=$((ok+1)); fi
+  if git -C "$D" push -q origin :refs/tags/v1.0.0 2>/dev/null; then echo "  ✖ pre-push deixou apagar tag"; fail=$((fail+1)); else echo "  ✔ pre-push barra apagar tag publicada"; ok=$((ok+1)); fi
+  # pre-push: roda o gate no range (mensagem fora do padrão não sai)
+  git -C "$D" checkout -q -b feat/ruim; w r.txt 1; git -C "$D" add -A; git -C "$D" commit -q --no-verify -m "mensagem sem tipo"
+  if git -C "$D" push -q origin feat/ruim 2>/dev/null; then echo "  ✖ pre-push deixou commit fora do padrão sair"; fail=$((fail+1)); else echo "  ✔ pre-push roda o gate no range"; ok=$((ok+1)); fi
 else echo "  ✖ assets/hooks ausente"; fail=$((fail+1)); fi
 
 echo

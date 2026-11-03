@@ -25,10 +25,10 @@ no corpo do commit.
 - **PR pequeno:** revisável em ~15 min? Senão, proponha fatiamento (`references/fluxo.md` §3).
 - **Descrição do PR** responde as 4 perguntas (o quê/porquê, como testou, risco/rollback, onde olhar)?
 - **BREAKING:** há mudança de contrato sem `!`/`BREAKING CHANGE`? O SemVer calculado bate?
-- **Ruleset da `main`:** force push bloqueado, linear, PR, status check, assinatura? (`gh api repos/<o>/<r>/rulesets`)
+- **Ruleset da `main`:** force push bloqueado, linear, PR, assinatura? E **nenhum** status check de CI por PR (piso 27); ruleset de tags `v*`/`hml-*`? (`gh api repos/<o>/<r>/rulesets`)
 - **CODEOWNERS** cobre `.github/`, auth, migrations, IaC, e aponta para time?
 - **Histórico publicado reescrito?** Qualquer force push em `main`/tag é achado crítico.
-- **Local diverge do publicado?** (`git status -sb`; commits só locais) — regra GitHub-é-a-fonte.
+- **Local diverge do publicado?** `check-git.sh . --conclusao` (remote, árvore limpa, `HEAD == origin`; piso 22) — exit 1 = não concluído.
 
 ## 3. Feche
 
